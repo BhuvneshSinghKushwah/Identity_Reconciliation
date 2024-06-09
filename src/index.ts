@@ -5,7 +5,7 @@ const prisma = new PrismaClient()
 
 const app = express();
 app.use(express.json());
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 const addNewContact = async (value: any) => {
     try {
