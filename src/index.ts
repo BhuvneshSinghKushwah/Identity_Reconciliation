@@ -18,6 +18,9 @@ const addNewContact = async (value: any) => {
             }
         })
 
+        console.log("adding new contact", value);
+        console.log("new contact addition", addNewContact);
+
         // console.log(newContact);
         return newContact;
     } catch (e) {
@@ -27,7 +30,8 @@ const addNewContact = async (value: any) => {
 }
 
 const rearrangeLinkedPrecedence = async (value: { phoneNumber: string, email: string }, contacts_list: any) => {
-    try {
+    try {  
+        console.log("first contact in list", contacts_list[0])
 
         let id = contacts_list[0].id;
 
@@ -36,7 +40,7 @@ const rearrangeLinkedPrecedence = async (value: { phoneNumber: string, email: st
                 where: { id: contacts_list[0].linkedId },
                 data: { linkPrecedence: "primary" }
             });
-            contacts_list[0].linkedId
+            id = contacts_list[0].linkedId
         }
         await prisma.contact.updateMany({
             where: {
@@ -60,7 +64,7 @@ const rearrangeLinkedPrecedence = async (value: { phoneNumber: string, email: st
 
         await addNewContact({ phoneNumber: value.phoneNumber, email: value.email, linkedId: id, linkPrecedence: 'secondary' });
 
-        return true;
+        return id;
     } catch (e) {
         console.error(e);
         throw e;
@@ -86,43 +90,68 @@ app.post('/identify', async (req, res) => {
 
         console.log("FOUND", contacts_list);
 
+        let update_contacts_list; 
+
         if (contacts_list.length > 0) {
-            await rearrangeLinkedPrecedence(req.body, contacts_list);
+            const id_after_rearrage = await rearrangeLinkedPrecedence(req.body, contacts_list);
+            if(id_after_rearrage && typeof(id_after_rearrage) == 'number' && !isNaN(id_after_rearrage))
+            {
+                update_contacts_list = await prisma.contact.findMany({
+                    where: {
+                        OR: [
+                            { id: id_after_rearrage as number },
+                            { linkedId: id_after_rearrage as number }
+                        ]
+                    },
+                    orderBy: {
+                        createdAt: 'asc'
+                    }
+                });
+            }
         } else {
             await addNewContact(req.body);
+            update_contacts_list = await prisma.contact.findMany({
+                where: {
+                    OR: [
+                        { email: email as string },
+                        { phoneNumber: phoneNumber as string }
+                    ]
+                },
+                orderBy: {
+                    createdAt: 'asc'
+                }
+            });
         }
 
-        const update_contacts_list = await prisma.contact.findMany({
-            where: {
-                OR: [
-                    { email: email as string },
-                    { phoneNumber: phoneNumber as string }
-                ]
-            },
-            orderBy: {
-                createdAt: 'asc'
-            }
-        });
+
+
 
         console.log("updated list", update_contacts_list);
 
-        const primaryContactId = update_contacts_list[0].id;
-        const emails = [...new Set(update_contacts_list.map(contact => contact.email).filter(Boolean))];
-        const phoneNumbers = [...new Set(update_contacts_list.map(contact => contact.phoneNumber).filter(Boolean))];
-        const secondaryContactIds = update_contacts_list
-            .filter(contact => contact.linkPrecedence === 'secondary')
-            .map(contact => contact.id);
+        if(update_contacts_list)
+        {
+            const primaryContactId = update_contacts_list[0].id;
+            const emails = [...new Set(update_contacts_list.map(contact => contact.email).filter(Boolean))];
+            const phoneNumbers = [...new Set(update_contacts_list.map(contact => contact.phoneNumber).filter(Boolean))];
+            const secondaryContactIds = update_contacts_list
+                .filter(contact => contact.linkPrecedence === 'secondary')
+                .map(contact => contact.id);
+    
+            const response = {
+                contact: {
+                    primaryContactId,
+                    emails,
+                    phoneNumbers,
+                    secondaryContactIds
+                }
+            };
+    
+            return res.status(200).json(response);
+        }else 
+        {
+            return res.status(500).json({status: false, message: "Something Went Wrong"});
+        }
 
-        const response = {
-            contact: {
-                primaryContactId,
-                emails,
-                phoneNumbers,
-                secondaryContactIds
-            }
-        };
-
-        return res.status(200).json(response);
     } catch (e) {
         console.error(e);
         return res.status(500).json({ status: false, message: "Something Went Wrong!!" });
@@ -141,7 +170,7 @@ app.delete('/delete/all', async (req, res) => {
 app.get('/', async (req, res) => {
     const data = await prisma.contact.findMany();
     console.log(data);
-    res.status(200).json({ status: true, message: "Hello World", data: data });
+    res.status(200).json({ status: true, message: "Hello Bitespeed!!", data: data });
 });
 
 app.listen(port, () => {
